@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# -*-Shell-script-*-
+# shellcheck shell=bash
+# shellcheck disable=SC2006
+
+# Author Gary Gordhamer
+
+# INT - DATE   - Description
+# ----------------------------------------------------------------------------
+# GG - 20251011 - Initial version of script
+#
+
+# FUNCTIONS in this Library:
+#  setOraenv
+#  callSQLPlus
+#  chkOraDBUp
+
+# if we have already loaded thes libraries then exit
+if [ -n "${OFNORASHLIB:-}" ]; exit 0
+
+# set parameters to exit on unbound variable and return any error in pipe
+set -uo pipefail
+
+# function to set the shell environment for Oracle
+#   setOraenv
+#
+function setOraenv(){
+
+    ORACLE_SID=FREE
+    export ORACLE_SID
+    export ORAENV_ASK=NO
+    source /usr/local/bin/oraenv -
+
+}
+
+# function to verify that Oracle Free is installed
+#   chkOraInst
+function chkOraInst(){
+
+    # list of issues we find during the test
+    local my_issue_list
+    local my_temp
+
+    # load basic settings
+    oratab=$( cfgGet "$CONF_FILE" oratab )
+    orainst=$( cfgGet "$CONF_FILE" orainst )
+    dbsid=$( cfgGet "$CONF_FILE" dbsid )
+
+    # check Oracle inventory
+    if [ -f ${orainst} ] ; then
+        orainventory=$( cfgGet "${orainst}" inventory_loc )
+        my_temp=$( /bin/grep "HOME NAME" "${orainventory}/ContentsXML/inventory.xml" | /bin/cut -d " " -f 3 | /bin/cut -d = -f 2 | /bin/tr -d \" )
+        [ -z "${my_temp:-}" ] && my_issue_list="${my_issue_list}\nCould not find software in inventory"
+        [ ! -d "${my_temp}" ] && my_issue_list="${my_issue_list}\nMissing software directory $my_temp"
+        [ ! -f "${my_temp}/bin/oracle" ] && my_issue_list="${my_issue_list}\nMissing database binary $my_temp/bin/oracle"
+        [ ! -f "${my_temp}/bin/sqlplus" ] && my_issue_list="${my_issue_list}\nMissing database binary $my_temp/bin/sqlplus"
+
+    else
+       my_issue_list="${my_issue_list}\nMissing ora Inventory pointer $orainst}"
+    fi
+
+    [ -f ${oratab} ] && my_issue_list="${my_issue_list}\nMissing oratab $oratab}"
+    if /bin/awk -v sid="${dbsid}" 'BEGIN{FS=":"; badsid=1} { if ($1 == sid) badsid=0; } END{ exit badsid }' "${oratab}" ; then
+        my_temp=$( /bin/grep -iE "^${dbsid}" "${oratab}" | /bin/cut -d : -f 2 )
+        [ ! -d "${my_temp}" ] && my_issue_list="${my_issue_list}\nORATAB entry $my_temp directory does not exist"
+    else
+        my_issue_list="${my_issue_list}\nMissing SID $dbsid in ORATAB $oratab}"
+    fi
+    
+    [ -n "${my_issue_list:-}" ] && logMesg 3 "Oracle free install check failed: ${my_issue_list}" E "NONE"
+    return $?
+
+}
+
+# function to do a quick lookup in sql plus
+#  queries should return a single value
+#  enclose queries in double quotes, and escape $ "my query from v\$table where value='value';"
+#  if the data contains KEEP, the query returns the second value only
+#  Spaces are removed from results
+#  returns "-1" when fail occurs
+function callSQLPlus () {
+
+    local my_sql_query="$1"
+    local my_sql_output
+    local my_return_text="-1"
+
+    # echo "Running SQLPlus Query : ${my_sql_query}" >> "${LOG_FILE}"
+
+    # | /bin/tee -a "${LOG_FILE}"
+    set -o pipefail; my_sql_output=$("${ORACLE_HOME}/bin/sqlplus" -s /nolog  <<!EOF 
+          WHENEVER sqlerror EXIT sql.sqlcode;
+          CONNECT / AS SYSDBA
+          set pagesize 0
+          ${my_sql_query}
+          exit
+!EOF
+)
+    # shellcheck disable=SC2181
+    if (( $? == 0 )); then
+        # If using the KEEP syntax, strip the extra data out of the return
+        if [[ "${my_sql_output}" =~ "KEEP" ]]; then my_sql_output=$( echo "${my_sql_output}" | /bin/grep KEEP | /bin/sed 's/KEEP//;s/[ ]//g' ); fi
+        my_return_text="${my_sql_output}"
+    fi
+    echo "$my_return_text"
+}
+
+# function to check if oracle DB is running and pull some key information
+#  Also queries database for relevent configuration information for pdb
+function chkOraDBUp {
+
+  # pass in the pdb name to get information from
+  local my_pdb=$1 
+  local my_var_list
+
+  # Check if Oracle is running (be sure to use -f option for SID longer than 6 characters)
+  # ps -e -o pid,comm,cmd,args |grep pmon
+  if /bin/pgrep -f "pmon_${my_oracle_sid}" >/dev/null ; then
+    
+      dbid=$( call_sqlplus "select 'KEEP', dbid FROM v\$pdbs where name = '${my_pdb^^};" )
+      if [ "$my_dbid" == "-1" ]; then
+          echo "ERROR! could not query database to verify ready for backup." >> "${LOG_FILE}"
+          retrun 2
+      fi
+      dbopenmode=$( call_sqlplus "select 'KEEP', open_mode FROM v\$pdbs where name = '${my_pdb^^};" )
+      dbrecovery=$( call_sqlplus "select 'KEEP', recovery_status FROM v\$pdbs where name = '${my_pdb^^};" )
+      dbbackup=$( call_sqlplus "select 'KEEP', backup_status FROM v\$pdbs where name = '${my_pdb^^};" )
+      dblogmode=$( call_sqlplus "select 'KEEP', log_mode FROM v\$database;" )
+      dbcurrentscn=$( call_sqlplus "select 'KEEP', current_scn FROM v\$database;" )
+      dbplatform="$( call_sqlplus "select 'KEEP', platform_name FROM v\$database;" )"
+
+
+      dbdiagdst="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'diagnostic_dest';" )/diag"
+      dbaudit="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'audit_file_dest';" )"
+      dbfiledst="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'db_create_file_dest';" )"
+      dbbackdest="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'background_dump_dest';" )"
+      dbspfile="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'spfile';" )"
+      dblogfrmt="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'log_archive_format';" )"
+      dbctlfiles="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'control_files';" )"
+      dblogdest="$( call_sqlplus "select 'KEEP', destination FROM v\$archive_dest where status = 'VALID';" )"
+      dbfiledst="$( /bin/dirname $( call_sqlplus "select 'KEEP', name from v\$datafile where con_id > 2 and name like '%system%';" ) )"
+   
+      # For test mode output what we discovered about the database
+      my_var_list="dbopenmode dbrecovery dbbackup dblogmode dbcurrentscn dbplatform dbdiagdst dbaudit dbfiledst dbbackdest dbspfile dblogfrmt dbctlfiles dblogdest dbfiledst"
+     if [ "$TEST" == "TRUE" ]; then 
+         logMesg 0 "chkOraDBUp discovered DB information:" I "NONE"
+         for my_var in ${my_var_list}; do
+             logMesg 0 "$my_var: ${!my_var}" I "NONE"  
+         done
+     fi
+  else
+      logMesg 2 "Oracle database $ORACLE_SID not running!" E "NONE"
+      return 2
+  fi
+
+  return 0
+}
+
+# Internal settings
+export OFNORASHLIB=LOADED
+
+# END
+
