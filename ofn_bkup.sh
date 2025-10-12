@@ -8,6 +8,7 @@
 SCRIPTVER=1.0.0
 SCRIPTNAME=$(basename "${BASH_SOURCE[0]}")
 source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"/ofn.shlib
+PIDFILE="/${SCRIPTNAME%.*}.pid"
 
 # retun command line help information
 function help_ofn_bkup {
@@ -249,6 +250,8 @@ if checkopt_ofn_bkup "$OPTIONS" ; then
     logMesg 0 "$SCRIPTNAME start" I "NONE"
     if [ "$DEBUG" == "TRUE" ]; then logMesg 0 "DEBUG Mode Enabled!" I "NONE" ; fi
     if [ "$TEST" == "TRUE" ]; then logMesg 0 "TEST Mode Enabled, commands will not be run." I "NONE" ; fi
+    # check that no other backup is runnig
+    check_pid "${PIDFILE}" && exit 2
 
     # check settings, otherwise lookup default setting from config file
     if [ -z "${dbpdb:-}" ]; then dbpdb=$( cfgGet "$CONF_FILE" dbpdb ); fi
@@ -273,11 +276,13 @@ if checkopt_ofn_bkup "$OPTIONS" ; then
 
     # check for required settings
     if ! inlist "RMAN DP" ${bkuptype^^}; then
-        logMsg 1 "Invalid backup type: ${bkuptype}" E "NONE"; fi
+        logMsg 1 "Invalid backup type: ${bkuptype}" E "NONE"
         return_code=$?
+    fi
     if [ "${bkuptype^^}" == "RMAN" ] && ! inList "I F A" "${bkuplvl^^}"; then
-        logMsg 1 "Invalid backup level not provided or invalid level: ${bkuplvl}" E "NONE"; fi
+        logMsg 1 "Invalid backup level or not provided: ${bkuplvl}" E "NONE"
         return_code=$?
+    fi
 
     # set Oracle environment, check database status
     setOraenv
@@ -307,7 +312,7 @@ if checkopt_ofn_bkup "$OPTIONS" ; then
                 return_code=$?
                 ;;
             esac
-        else
+        else # check backup destination
             logMesg 3 "Could not find or create backup destination: $bkupdst" E "NONE"
             return_code=$?
         fi;
@@ -316,7 +321,10 @@ if checkopt_ofn_bkup "$OPTIONS" ; then
         return_code=2
     fi  # chkOraDBUp
 
-     
+
+    # clean pid file
+    [ -f "${PIDFILE}" ] && /bin/rm "${PIDFILE}"
+
 else
     echo "ERROR - invalid command line parameters" >&2
     return_code=1
