@@ -16,7 +16,7 @@
 #  chkOraDBUp
 
 # if we have already loaded thes libraries then exit
-if [ -n "${OFNORASHLIB:-}" ]; exit 0
+if [ -n "${OFNORASHLIB:-}" ]; then exit 0; fi
 
 # set parameters to exit on unbound variable and return any error in pipe
 set -uo pipefail
@@ -29,7 +29,7 @@ function setOraenv(){
     ORACLE_SID=FREE
     export ORACLE_SID
     export ORAENV_ASK=NO
-    source /usr/local/bin/oraenv -
+    source /usr/local/bin/oraenv -s
 
 }
 
@@ -47,28 +47,30 @@ function chkOraInst(){
     dbsid=$( cfgGet "$CONF_FILE" dbsid )
 
     # check Oracle inventory
-    if [ -f ${orainst} ] ; then
+    if [ -f "${orainst}" ] ; then
         orainventory=$( cfgGet "${orainst}" inventory_loc )
         my_temp=$( /bin/grep "HOME NAME" "${orainventory}/ContentsXML/inventory.xml" | /bin/cut -d " " -f 3 | /bin/cut -d = -f 2 | /bin/tr -d \" )
-        [ -z "${my_temp:-}" ] && my_issue_list="${my_issue_list}\nCould not find software in inventory"
-        [ ! -d "${my_temp}" ] && my_issue_list="${my_issue_list}\nMissing software directory $my_temp"
-        [ ! -f "${my_temp}/bin/oracle" ] && my_issue_list="${my_issue_list}\nMissing database binary $my_temp/bin/oracle"
-        [ ! -f "${my_temp}/bin/sqlplus" ] && my_issue_list="${my_issue_list}\nMissing database binary $my_temp/bin/sqlplus"
+        [ -z "${my_temp:-}" ] && my_issue_list="${my_issue_list:-}\\nCould not find software in inventory"
+        [ ! -d "${my_temp}" ] && my_issue_list="${my_issue_list:-}\\nMissing software directory $my_temp"
+        [ ! -f "${my_temp}/bin/oracle" ] && my_issue_list="${my_issue_list:-}\\nMissing database binary $my_temp/bin/oracle"
+        [ ! -f "${my_temp}/bin/sqlplus" ] && my_issue_list="${my_issue_list:-}\\nMissing database binary $my_temp/bin/sqlplus"
 
     else
-       my_issue_list="${my_issue_list}\nMissing ora Inventory pointer $orainst}"
+       my_issue_list="${my_issue_list:-}\\nMissing ora Inventory pointer $orainst}"
     fi
 
-    [ -f ${oratab} ] && my_issue_list="${my_issue_list}\nMissing oratab $oratab}"
-    if /bin/awk -v sid="${dbsid}" 'BEGIN{FS=":"; badsid=1} { if ($1 == sid) badsid=0; } END{ exit badsid }' "${oratab}" ; then
-        my_temp=$( /bin/grep -iE "^${dbsid}" "${oratab}" | /bin/cut -d : -f 2 )
-        [ ! -d "${my_temp}" ] && my_issue_list="${my_issue_list}\nORATAB entry $my_temp directory does not exist"
+    if [ -f "${oratab}" ]; then
+        if /bin/awk -v sid="${dbsid}" 'BEGIN{FS=":"; badsid=1} { if ($1 == sid) badsid=0; } END{ exit badsid }' "${oratab}" ; then
+            my_temp=$( /bin/grep -iE "^${dbsid}" "${oratab}" | /bin/cut -d : -f 2 )
+            [ ! -d "${my_temp}" ] && my_issue_list="${my_issue_list:-}\\nORATAB entry $my_temp directory does not exist"
+        else
+            my_issue_list="${my_issue_list:-}\\nMissing SID $dbsid in ORATAB $oratab}"
+        fi # check for sid in oratab
     else
-        my_issue_list="${my_issue_list}\nMissing SID $dbsid in ORATAB $oratab}"
-    fi
-    
-    [ -n "${my_issue_list:-}" ] && logMesg 3 "Oracle free install check failed: ${my_issue_list}" E "NONE"
-    return $?
+        my_issue_list="${my_issue_list:-}\\nMissing oratab $oratab}"
+    fi  # check for oratab
+    [ -n "${my_issue_list:-}" ] && logMesg 3 "Oracle free install check failed: ${my_issue_list}" E "NONE" && return 3
+    return 0
 
 }
 
@@ -91,6 +93,7 @@ function callSQLPlus () {
           WHENEVER sqlerror EXIT sql.sqlcode;
           CONNECT / AS SYSDBA
           set pagesize 0
+          set linesize 32767
           ${my_sql_query}
           exit
 !EOF
@@ -114,33 +117,33 @@ function chkOraDBUp {
 
   # Check if Oracle is running (be sure to use -f option for SID longer than 6 characters)
   # ps -e -o pid,comm,cmd,args |grep pmon
-  if /bin/pgrep -f "pmon_${my_oracle_sid}" >/dev/null ; then
+  if /bin/pgrep -f "pmon_${ORACLE_SID}" >/dev/null ; then
     
-      dbid=$( call_sqlplus "select 'KEEP', dbid FROM v\$pdbs where name = '${my_pdb^^};" )
-      if [ "$my_dbid" == "-1" ]; then
-          echo "ERROR! could not query database to verify ready for backup." >> "${LOG_FILE}"
-          retrun 2
+      dbid=$( callSQLPlus "select 'KEEP', dbid FROM v\$pdbs where name = '${my_pdb^^}';" )
+      if [ "$dbid" == "-1" ]; then
+          logMesg 3 "could not query database to verify ready for backup." E "NONE"
+          return $?
       fi
-      dbopenmode=$( call_sqlplus "select 'KEEP', open_mode FROM v\$pdbs where name = '${my_pdb^^};" )
-      dbrecovery=$( call_sqlplus "select 'KEEP', recovery_status FROM v\$pdbs where name = '${my_pdb^^};" )
-      dbbackup=$( call_sqlplus "select 'KEEP', backup_status FROM v\$pdbs where name = '${my_pdb^^};" )
-      dblogmode=$( call_sqlplus "select 'KEEP', log_mode FROM v\$database;" )
-      dbcurrentscn=$( call_sqlplus "select 'KEEP', current_scn FROM v\$database;" )
-      dbplatform="$( call_sqlplus "select 'KEEP', platform_name FROM v\$database;" )"
+      dbopenmode=$( callSQLPlus "select 'KEEP', open_mode FROM v\$pdbs where name = '${my_pdb^^}';" )
+      dbrecovery=$( callSQLPlus "select 'KEEP', recovery_status FROM v\$pdbs where name = '${my_pdb^^}';" )
+      dbbackup=$( callSQLPlus "select 'KEEP', backup_status FROM v\$pdbs where name = '${my_pdb^^}';" )
+      dblogmode=$( callSQLPlus "select 'KEEP', log_mode FROM v\$database;" )
+      dbcurrentscn=$( callSQLPlus "select 'KEEP', current_scn FROM v\$database;" )
+      dbplatform="$( callSQLPlus "select 'KEEP', platform_name FROM v\$database;" )"
 
 
-      dbdiagdst="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'diagnostic_dest';" )/diag"
-      dbaudit="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'audit_file_dest';" )"
-      dbfiledst="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'db_create_file_dest';" )"
-      dbbackdest="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'background_dump_dest';" )"
-      dbspfile="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'spfile';" )"
-      dblogfrmt="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'log_archive_format';" )"
-      dbctlfiles="$( call_sqlplus "select 'KEEP', value FROM v\$parameter where name = 'control_files';" )"
-      dblogdest="$( call_sqlplus "select 'KEEP', destination FROM v\$archive_dest where status = 'VALID';" )"
-      dbfiledst="$( /bin/dirname $( call_sqlplus "select 'KEEP', name from v\$datafile where con_id > 2 and name like '%system%';" ) )"
+      dbdiagdst="$( callSQLPlus "select 'KEEP', value FROM v\$parameter where name = 'diagnostic_dest';" )/diag"
+      dbaudit="$( callSQLPlus "select 'KEEP', value FROM v\$parameter where name = 'audit_file_dest';" )"
+      dbfiledst="$( callSQLPlus "select 'KEEP', value FROM v\$parameter where name = 'db_create_file_dest';" )"
+      dbbackdest="$( callSQLPlus "select 'KEEP', value FROM v\$parameter where name = 'background_dump_dest';" )"
+      dbspfile="$( callSQLPlus "select 'KEEP', value FROM v\$parameter where name = 'spfile';" )"
+      dblogfrmt="$( callSQLPlus "select 'KEEP', value FROM v\$parameter where name = 'log_archive_format';" )"
+      dbctlfiles="$( callSQLPlus "select 'KEEP', value FROM v\$parameter where name = 'control_files';" )"
+      dblogdest="$( callSQLPlus "select 'KEEP', destination FROM v\$archive_dest where status = 'VALID';" )"
+      dbfiledst="$( /bin/dirname $( callSQLPlus "select 'KEEP', name from v\$datafile where con_id > 2 and name like '%system%';" ) )"
    
       # For test mode output what we discovered about the database
-      my_var_list="dbopenmode dbrecovery dbbackup dblogmode dbcurrentscn dbplatform dbdiagdst dbaudit dbfiledst dbbackdest dbspfile dblogfrmt dbctlfiles dblogdest dbfiledst"
+      my_var_list="dbid dbopenmode dbrecovery dbbackup dblogmode dbcurrentscn dbplatform dbdiagdst dbaudit dbfiledst dbbackdest dbspfile dblogfrmt dbctlfiles dblogdest dbfiledst"
      if [ "$TEST" == "TRUE" ]; then 
          logMesg 0 "chkOraDBUp discovered DB information:" I "NONE"
          for my_var in ${my_var_list}; do

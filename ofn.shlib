@@ -20,7 +20,7 @@
 #  trim " ab cd "
 
 # if we have already loaded thes libraries then exit
-if [ -n "${OFNSHLIB:-}" ]; exit 0
+if [ -n "${OFNSHLIB:-}" ]; then exit 0; fi
 
 # set parameters to exit on unbound variable and return any error in pipe
 set -uo pipefail
@@ -60,7 +60,7 @@ function logMesg(){
         esac
         timestamp=$( date +%Y%m%d-%H%M%S )
         msg_code=$(printf "%03d" "$msg_code")
-        status_msg="${timestamp} - GG-${msg_level} ${msg_code} - ${msg_text}"  
+        status_msg="${timestamp} - OFN-${msg_level} ${msg_code} - ${msg_text}"  
 
         if [ "$msg_file" = "NONE" ]; then
             echo "$status_msg" 
@@ -78,7 +78,7 @@ function logMesg(){
                 msg_code=255
             fi
         fi
-    fi
+    fi # check for number of options
 
     return $msg_code
 }
@@ -97,6 +97,7 @@ cfgGet() {
         if [ -r "${conf_file}" ]; then
 
             conf_set=$( grep -E "^${conf_name}=" -m 1 "${conf_file}" 2>/dev/null || echo "VAR=__UNDEFINED__" )
+            conf_set=$( echo "${conf_set}" | /bin/sed 's/\s*#.*$//' ) # remove tailing comments from the config line
             if [ "$DEBUG" == "TRUE" ]; then echo "conf_set: ${conf_set}" >&2; fi
             conf_val=$( echo "${conf_set}" |  head -n 1 | cut -d '=' -f 2-; )
             if [ "$DEBUG" == "TRUE" ]; then echo "conf_val: ${conf_val}" >&2; fi
@@ -135,7 +136,7 @@ cfgGetD() {
 
 # Simple function to see if a value exists in a space separated list of values
 #  usage  inList "A B C D" "B"
-function inList {
+function inList() {
 
   local my_list="$1"
   local my_item="$2"
@@ -152,7 +153,7 @@ function inList {
 
 # Simple function to see if a value exists in a coma separated list of values
 #  usage  inListC "A,B,C,D" "B"
-function inListC {
+function inListC() {
 
     local my_listc="$1"
     local my_itemc="$2"
@@ -181,22 +182,23 @@ trim() {
 
 # check if PID is running, if not set PID for current script
 #
-function check_pid {
+function check_pid() {
 
   local my_pid_file="$1"
+  local my_logfile="$2"
 
-  [ "$TEST" == "TRUE" ] && logMesg 0 "Checking for previous run PID file at $my_pid_file" I "NONE"
+  [ "$TEST" == "TRUE" ] && logMesg 0 "Checking for previous run PID file at $my_pid_file" I "${my_logfile}"
 
   # check if the pid file exists and if the process is running
   if [ -f "${my_pid_file}" ]; then
       if /bin/ps -p "$( /bin/cat "${my_pid_file}" )" >/dev/null; then
-          logMesg 2 "$SCRIPTNAME already running under PID $( /bin/cat "${my_pid_file}" )" E "NONE"
+          logMesg 2 "$SCRIPTNAME already running under PID $( /bin/cat "${my_pid_file}" )" E "${my_logfile}"
           return  $?
       else
-          logMesg 0 "PID file exists, process no longer running.  Overwriting file." W "NONE"
+          logMesg 0 "PID file exists, process no longer running.  Overwriting file." W "${my_logfile}"
       fi
 
-      [ "$TEST" == "TRUE" ] && logMesg 0 "PID file does not exist, no previous process running." I "NONE"
+      [ "$TEST" == "TRUE" ] && logMesg 0 "PID file does not exist, no previous process running." I "${my_logfile}"
   fi
 
   # set the current pid file
@@ -211,15 +213,18 @@ ofnlog=$( cfgGet "$CONF_FILE" ofnlog )
 ofnrun=$( cfgGet "$CONF_FILE" ofnrun )
 
 if [ "${ofndata}" == "__UNDEFINED__" ] || [ -z "${ofndata:-}" ]; then
-    logMesg 1 "Could not load confiuration file or missing settings: $CONF_FILE" E "NONE"
+    logMesg 1 "Could not load configuration file or missing settings ofndata: $CONF_FILE" E "NONE"
+    exit $?
 fi
 
-if [ "${ofnlog}" == "__UNDEFINED__" ] || [ -z "${ofndlog:-}" ]; then
-    logMesg 1 "Could not load confiuration file or missing settings: $CONF_FILE" E "NONE"
+if [ "${ofnlog}" == "__UNDEFINED__" ] || [ -z "${ofnlog:-}" ]; then
+    logMesg 1 "Could not load configuration file or missing settings ofnlog: $CONF_FILE" E "NONE"
+    exit $?
 fi
 
-if [ "${ofnrun}" == "__UNDEFINED__" ] || [ -w "${ofnrun:-}" ]; then
-    logMesg 1 "Could not load confiuration file: $CONF_FILE or cannot write to run dir: $ofnrun" E "NONE"
+if [ "${ofnrun}" == "__UNDEFINED__" ] || [ ! -d "${ofnrun}" ]; then
+    logMesg 1 "Could not load ofnrun from configuration file: $CONF_FILE or cannot write to run dir: $ofnrun" E "NONE"
+    exit $?
 fi
 
 # Internal settings
