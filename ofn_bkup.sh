@@ -5,7 +5,7 @@
 # script to deal with database backup and restores
 
 # Internal settings
-SCRIPTVER=1.0.0
+SCRIPTVER=1.0.1
 SCRIPTNAME=$(basename "${BASH_SOURCE[0]}")
 source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"/ofn.shlib
 source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"/ofn_ora.shlib
