@@ -75,7 +75,7 @@ function chkOraInst(){
 }
 
 # function to do a quick lookup in sql plus
-#  queries should return a single value
+#  queries should return a single value, end in a semicolon, 
 #  enclose queries in double quotes, and escape $ "my query from v\$table where value='value';"
 #  if the data contains KEEP, the query returns the second value only
 #  Spaces are removed from results
@@ -157,6 +157,37 @@ function chkOraDBUp {
 
   return 0
 }
+
+# ADRCI need to add features
+# Check which homes exist
+#  adrci> show homes
+#
+# check log purge setting / last purge time
+#  adrci> set home <home>
+#  adrci> select SHORTP_POLICY,LONGP_POLICY,LAST_AUTOPRG_TIME from adr_control;
+#  adrci> show control
+#  adrci> set control (SHORTP_POLICY=xxx)  -- short life items in hours
+#  adrci> set control (LONGP_POLICY=xxx)   -- long life items in hours
+#
+# Check for errors
+#   adrci> show problem
+#   adrci> show incident
+#
+# Manual purge
+#  adrci> purge -age 2880 -type trace -- (Deletes older than 2 days trace files. [2880 minutes=2 days])
+#  adrci> purge -age 2880 -type alert -- (Deletes older than 2 days alert files.
+#    It is possible to delete the following file types with the same command:
+#    ALERT – files in ./alert directory
+#    INCIDENT — files in ./incident/incdir_<incid> directory
+#    TRACE — files in ./trace directory
+#    CDUMP — files in ./cdump directory
+#    UTSCDMP — ./trace/cdmp_<timestamp> directories
+#    STAGE — files in ./stage directory
+#    SWEEP — files in ./sweep directory
+#    HM — files in the ./hm directory and metadata information in the HM schema
+#    IPS — files in the ./incpkg directory and the metadata information in the IPS schema
+# Purge All Files
+#    adrci> purge -age 2880  -- (Deletes older than 2 days all files. [2880 minutes=2 days])
 
 # Internal settings
 export OFNORASHLIB=LOADED

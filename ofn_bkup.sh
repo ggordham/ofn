@@ -180,6 +180,7 @@ rmanbackup () {
     echo "DELETE NOPROMPT EXPIRED BACKUP DEVICE TYPE DISK;" >> "${my_rman_script}"
     echo ""                                              >> "${my_rman_script}"
     echo "DELETE NOPROMPT OBSOLETE DEVICE TYPE DISK;"    >> "${my_rman_script}"
+    echo "DELETE NOPROMPT ARCHIVELOG ALL BACKED UP 1 TIMES TO DEVICE TYPE DISK;"    >> "${my_rman_script}"
     echo ""                                              >> "${my_rman_script}"
     echo "RELEASE CHANNEL DISK1;"                        >> "${my_rman_script}"
     echo "}" >> "${my_rman_script}"
@@ -190,6 +191,42 @@ rmanbackup () {
     run_rman "${my_rman_script}" "${my_logfile}"
     return $?
 }
+
+# function to check and possibly set control file retention
+# Note retention needs to cover backup retntion period
+#   EG if backup retention is 14 days, then this needs to be
+#   one week farther to cover cleanup (so doing retention + 8)
+#
+chk_set_retention () {
+
+  local my_setting="$(( bkuprtn + 8 ))"
+  local my_value
+  local my_sql
+  local my_return_code=0
+
+  logMesg 0 "Checking control_file_record_keep_time setting." I "${log_file}"
+  my_sql="SELECT 'KEEP', value FROM v\$parameter WHERE name = 'control_file_record_keep_time';"
+  my_value="$( callSQLPlus "${my_sql}" )"
+
+  # if not higher then needed setting, we will change it
+  if (( my_value < my_setting )); then
+      logMesg 0 "control_file_record_keep_time set to low: ${my_value}" I "${log_file}"
+      my_sql="ALTER SYSTEM SET control_file_record_keep_time=${my_setting} SCOPE=both;"
+      my_value="$( callSQLPlus "${my_sql}" )"
+      if (( my_value < 0 )); then
+          logMesg 2 "control_file_record_keep_time could not be adjusted! " E "${log_file}"
+          my_return_code=1
+      else
+          logMesg 0 "control_file_record_keep_time adjusted to: ${my_setting}" I "${log_file}"
+          logMesg 0 "control_file_record_keep_time adjusted to: ${my_setting}" I "${log_file}"
+      fi
+  else
+      logMesg 0 "control_file_record_keep_time set correctly: ${my_value}" I "${log_file}"
+  fi
+
+  return ${my_return_code}
+}
+
 
 # function to run rman cleanup
 #
@@ -219,6 +256,7 @@ rmancleanup () {
     echo "DELETE NOPROMPT EXPIRED BACKUP DEVICE TYPE DISK;" >> "${my_rman_script}"
     echo ""                                              >> "${my_rman_script}"
     echo "DELETE NOPROMPT OBSOLETE DEVICE TYPE DISK;"    >> "${my_rman_script}"
+    echo "DELETE NOPROMPT ARCHIVELOG ALL BACKED UP 1 TIMES TO DEVICE TYPE DISK;"    >> "${my_rman_script}"
     echo ""                                              >> "${my_rman_script}"
     echo "RELEASE CHANNEL DISK1;"                        >> "${my_rman_script}"
     echo "RELEASE CHANNEL DISK2;"                        >> "${my_rman_script}"
@@ -297,6 +335,14 @@ if checkopt_ofn_bkup "$OPTIONS" ; then
     setOraenv
     if (( return_code < 1 )) && chkOraDBUp "${dbpdb}" ; then
 
+        # Check control file record keep
+        chk_set_retention
+
+        # get database log mode
+        sql="SELECT 'KEEP', log_mode FROM v\$database;"
+        dblogmode="$( callSQLPlus "${sql}" )"
+        logMesg 0 "Database log_mode:  ${dblogmode}" I "${log_file}"
+
         # Check destination directory
         if [ -d "${bkupdst}" ] || /bin/mkdir -p "${bkupdst}" ; then
        
@@ -335,7 +381,7 @@ if checkopt_ofn_bkup "$OPTIONS" ; then
     # clean pid file
     logMesg 0 "Final return code: ${return_code}" I "${log_file}"
     logMesg 0 "End ${SCRIPTNAME} cleaning pidfile ${PIDFILE}" I "${log_file}"
-    [ -f "${PIDFILE}" ] && /bin/rm "${PIDFILE}"
+    [ -f "${PIDFILE}" ] && /bin/rm "${PIDFILE}" >> "${log_file}" 2>&1
    # compress log file when done
    [ -f "${log_file}" ] && /bin/gzip "${log_file}"
    logMesg 0 "Logfile at: ${log_file}.gz" I "NONE"
