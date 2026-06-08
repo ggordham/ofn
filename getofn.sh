@@ -102,7 +102,7 @@ if [ "$reboot" == "TRUE" ]; then echo "reboot after cloud-init Mode Enabled." | 
 # tar has to be installed first
 if ! /bin/rpm --quiet -q tar; then
     echo "tar not installed, installing." >> "${log_file}"
-    /bin/dnf install -y tar | /usr/bin/tee -a "${log_file}" 2>&1
+    /usr/bin/sudo /bin/dnf install -y tar | /usr/bin/tee -a "${log_file}" 2>&1
 fi
 
 # make the target directory for ofn
