@@ -208,6 +208,7 @@ function check_pid() {
 
 
 # load OFN global variables
+ofnbase=$( cfgGet "$CONF_FILE" ofnbase )
 ofndata=$( cfgGet "$CONF_FILE" ofndata )
 ofnlog=$( cfgGet "$CONF_FILE" ofnlog )
 ofnrun=$( cfgGet "$CONF_FILE" ofnrun )
