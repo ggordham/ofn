@@ -112,7 +112,7 @@ echo "  Making target path: $target_path" | /usr/bin/tee -a "${log_file}"
 /usr/bin/sudo /usr/bin/chgrp "${cur_group}" "${target_path}" >> "${log_file}" 2>&1
 
 # download the ofn scripts
-echo "  Downloading ofn scripts from: ${repo_url}/scripts/tstOraInst.sh" | /usr/bin/tee -a "${log_file}"
+echo "  Downloading ofn scripts from: ${repo_url}" | /usr/bin/tee -a "${log_file}"
 if [ "$TEST" == "TRUE" ]; then
     echo "Test mode, not running: /usr/bin/curl -L ${repo_url}/tarball/main | tar xz -C ${target_path} --strip=1 ${package_root}-???????" | /usr/bin/tee -a "${log_file}"
 else
