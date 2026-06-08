@@ -49,7 +49,7 @@ function chkOraInst(){
     # check Oracle inventory
     if [ -f "${orainst}" ] ; then
         orainventory=$( cfgGet "${orainst}" inventory_loc )
-        my_temp=$( /bin/grep "HOME NAME" "${orainventory}/ContentsXML/inventory.xml" | /bin/cut -d " " -f 3 | /bin/cut -d = -f 2 | /bin/tr -d \" )
+        my_temp=$( /bin/grep "HOME NAME" "${orainventory}/ContentsXML/inventory.xml" | /bin/grep -i free | /bin/cut -d " " -f 3 | /bin/cut -d = -f 2 | /bin/tr -d \" )
         [ -z "${my_temp:-}" ] && my_issue_list="${my_issue_list:-}\\nCould not find software in inventory"
         [ ! -d "${my_temp}" ] && my_issue_list="${my_issue_list:-}\\nMissing software directory $my_temp"
         [ ! -f "${my_temp}/bin/oracle" ] && my_issue_list="${my_issue_list:-}\\nMissing database binary $my_temp/bin/oracle"
@@ -69,7 +69,10 @@ function chkOraInst(){
     else
         my_issue_list="${my_issue_list:-}\\nMissing oratab $oratab}"
     fi  # check for oratab
-    [ -n "${my_issue_list:-}" ] && logMesg 3 "Oracle free install check failed: ${my_issue_list}" E "NONE" && return 3
+    if [ -n "${my_issue_list:-}" ]; then
+        logMesg 3 "Oracle free install check failed: ${my_issue_list}" E "NONE" 
+        return 3
+    fi
     return 0
 
 }

@@ -5,16 +5,44 @@
 DBFPNAME=oracle-ai-database-preinstall-26ai
 DBFPVER=1.0-1
 DBFNAME=oracle-ai-database-free-26ai
-DBFVER=23.26.0-1
+DBFVER=23.26.2-1
 # previous version
 #DBFNAME=oracle-database-free-23ai
-# DBFVER=23.9-1
+# DBFVER=23.9-1, 23.26.0-1
 
 # Internal settings
 SCRIPTVER=1.0.0
 SCRIPTNAME=$(basename "${BASH_SOURCE[0]}")
+export OFNINST=TRUE                    # disable pre-checks before loading
 source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"/ofn.shlib
-source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"/ofn_ora.shlib
+# source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"/ofn_ora.shlib
+
+# Setup run directory as system config
+mkOFNRUNDir(){
+
+    local my_var_dir=${1}
+    local my_log=${2}
+    local my_tmpfile=/etc/tmpfiles.d/ofn.conf
+
+    if [ -f "${my_tmpfile}" ]; then
+    # Make tempfile.d configuration file
+        logMesg 0 "Temp config exists: ${my_tmpfile}" I "${my_log}"
+    else
+        touch "${my_tmpfile}"
+        echo "# Oracle Free Now (OFN) install $(/bin/date )" > "${my_tmpfile}"
+        echo "# Type Path Mode UID GID Age Argument"        >> "${my_tmpfile}"
+        echo "d ${my_var_dir} 0755 oracle oinstall - -"     >> "${my_tmpfile}"
+        logMesg 0 "Created tempfiles config: ${my_tmpfile}" I "${my_log}"
+ 
+        # create directory
+        /bin/systemd-tmpfiles --create "${my_tmpfile}"
+        if (( $? > 0 )); then
+            logMesg 1 "Could not create rundir: ${my_var_dir}" E "${my_log}"
+        else
+            logMesg 0 "Created rundir: ${my_var_dir}" I "${my_log}"
+        fi
+    fi
+}
 
 # function to make directories needed by OFN
 mkOFNDir(){
@@ -24,8 +52,6 @@ mkOFNDir(){
     local my_return=0
 
     /bin/mkdir -p "${my_dir}" >> "${my_log}" 2>&1
-    /bin/chown 54321 /var/run/ofn >> "${my_log}" 2>&1
-    /bin/chgrp 54321 /var/run/ofn >> "${my_log}" 2>&1
     if [ -d "${my_dir}" ]; then
         logMesg 0 "Created directory: ${my_dir}" I "${my_log}"
         my_return=0
@@ -103,9 +129,10 @@ if [ ! -d "/opt/oracle" ]; then
     # note, /opt/orcle must be owned by oracle user
     mkOFNDir "/opt/oracle" "${log_file}" || return_code=2
 fi
-if [ ! -d "${ofnrun}" ]; then
-    mkOFNDir "${ofnrun}" "${log_file}" || return_code=2
-fi
+
+# Make run directory
+mkOFNRUNDir "${ofnrun}" "${log_file}" || return_code=2
+
 if [ ! -d "${ofndata}" ]; then
    mkOFNDir "${ofndata}" "${log_file}" || return_code=2
 fi

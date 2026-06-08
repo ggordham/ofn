@@ -3,6 +3,9 @@
 
 # Oracle (database) Free Now! (OFN) 
 # script to deal with database backup and restores
+#
+# TODO 
+#  work on DP based backup
 
 # Internal settings
 SCRIPTVER=1.0.1
@@ -269,6 +272,23 @@ rmancleanup () {
     return $?
 }
 
+function cleanLogs(){
+
+    local my_num_days="$(( $1 + 8 ))"
+    local my_log_dir="${2}"
+ 
+    # verify that retention is set correctly
+    if (( my_num_days > 8 )) && [ -d "${my_log_dir}" ]; then
+        logMesg 0 "Cleaning up logs older than ${my_num_days} days." I "${log_file}"
+        logMesg 0 "Log location ${my_log_dir} days. Deleting files" I "${log_file}"
+        /bin/find "${my_log_dir}" -maxdepth 0 -type f -name db-backup-\*.log -mtime "${my_num_days}" -ls -delete >> "${log_file}"
+        logMesg 0 "Finished log cleanup." I "${log_file}"
+    else
+        logMesg 1 "Couled not clean log files from ${my_log_dir} or bkuprtn set incorrectly to: ${1}" E "${log_file}"
+    fi
+
+}
+
 ############################################################################################
 # start here
 
@@ -334,6 +354,9 @@ if checkopt_ofn_bkup "$OPTIONS" ; then
     # set Oracle environment, check database status
     setOraenv
     if (( return_code < 1 )) && chkOraDBUp "${dbpdb}" ; then
+
+        # Verify that PDB is not setup for backup
+        [ -n "${ORACLE_PDB_SID:-}" ] && unset ORACLE_PDB_SID
 
         # Check control file record keep
         chk_set_retention

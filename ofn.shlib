@@ -222,7 +222,9 @@ if [ "${ofnlog}" == "__UNDEFINED__" ] || [ -z "${ofnlog:-}" ]; then
     exit $?
 fi
 
-if [ "${ofnrun}" == "__UNDEFINED__" ] || [ ! -d "${ofnrun}" ]; then
+
+# add OFNINST to bypass check during inital install
+if [ -n "${OFNINST:-}" ] || [ "${ofnrun}" == "__UNDEFINED__" ] || [ ! -d "${ofnrun}" ]; then
     logMesg 1 "Could not load ofnrun from configuration file: $CONF_FILE or cannot write to run dir: $ofnrun" E "NONE"
     exit $?
 fi
