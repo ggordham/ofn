@@ -16,6 +16,7 @@ SCRIPTNAME=$(basename "${BASH_SOURCE[0]}")
 export OFNINST=TRUE                    # disable pre-checks before loading
 source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"/ofn.shlib
 # source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"/ofn_ora.shlib
+file_owner=oracle:oinstall                         # target file ownership
 
 # Setup run directory as system config
 mkOFNRUNDir(){
@@ -149,7 +150,16 @@ dbfpurl="https://yum.oracle.com/repo/OracleLinux/OL${os_ver}/appstream/x86_64/ge
 dbfurl="https://download.oracle.com/otn-pub/otn_software/db-free/${DBFNAME}-${DBFVER}.el${os_ver}.x86_64.rpm"
 
 # try to install required RPMs
+# Pre-install first
 if instOFNRPM "${dbfpurl}" "${log_file}"; then
+
+    # post pre-install change ownership of files
+    /bin/chown -R "${file_owner}" "${oracle_base}"
+
+    # also fix any ofn files
+    /bin/chown -R "${file_owner}" "${ofnbase}"
+    /usr/bin/find "${ofnbase}" -name \*.sh -exec /usr/bin/chmod 754 {} \; 
+
     if ! instOFNRPM "${dbfurl}" "${log_file}"; then
         return_code=2
     fi

@@ -99,6 +99,11 @@ if [ "$TEST" == "TRUE" ]; then echo "TEST Mode Enabled, commands will not be run
 if [ "$refresh" == "TRUE" ]; then echo "refresh Mode Enabled, will only download scripts." | /usr/bin/tee -a "${log_file}"; fi
 if [ "$reboot" == "TRUE" ]; then echo "reboot after cloud-init Mode Enabled." | /usr/bin/tee -a "${log_file}"; fi
 
+# tar has to be installed first
+if ! /bin/rpm --quiet -q tar; then
+    echo "tar not installed, installing." >> "${log_file}"
+    /bin/dnf -y install tar /usr/bin/tee -a "${log_file}" 2>&1
+fi
 
 # make the target directory for ofn
 echo "  Making target path: $target_path" | /usr/bin/tee -a "${log_file}"

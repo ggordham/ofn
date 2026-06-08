@@ -42,6 +42,7 @@ function chkOraInst(){
     local my_temp
 
     # load basic settings
+    oracle_base=$( cfgGet "$CONF_FILE" oracle_base )
     oratab=$( cfgGet "$CONF_FILE" oratab )
     orainst=$( cfgGet "$CONF_FILE" orainst )
     dbsid=$( cfgGet "$CONF_FILE" dbsid )
