@@ -212,6 +212,7 @@ ofnbase=$( cfgGet "$CONF_FILE" ofnbase )
 ofndata=$( cfgGet "$CONF_FILE" ofndata )
 ofnlog=$( cfgGet "$CONF_FILE" ofnlog )
 ofnrun=$( cfgGet "$CONF_FILE" ofnrun )
+oracle_base=$( cfgGet "$CONF_FILE" oracle_base )
 
 if [ "${ofndata}" == "__UNDEFINED__" ] || [ -z "${ofndata:-}" ]; then
     logMesg 1 "Could not load configuration file or missing settings ofndata: $CONF_FILE" E "NONE"
