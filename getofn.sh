@@ -141,9 +141,9 @@ if [ "${reboot}" == "TRUE" ]; then
     # install the ofn install script for after reboot
     echo "Installing reboot script: ${target_path}/${install_script}" | /usr/bin/tee -a "${log_file}"
     if [ "$TEST" == "TRUE" ]; then
-        echo "Test mode, not running: ${SCRIPTDIR}/runonce.sh ${target_path}/${install_script}" | /usr/bin/tee -a "${log_file}"
+        echo "Test mode, not running: ${target_path}/runonce.sh ${target_path}/${install_script}" | /usr/bin/tee -a "${log_file}"
     else
-        "${SCRIPTDIR}/runonce.sh" "/usr/bin/sudo -u root ${target_path}/${install_script} > /tmp/cron-ofn_inst.log 2>&1" | /usr/bin/tee -a "${log_file}"
+        "${target_path}/runonce.sh" "/usr/bin/sudo -u root ${target_path}/${install_script} > /tmp/cron-ofn_inst.log 2>&1" | /usr/bin/tee -a "${log_file}"
     fi
     
     # reboot after cloud-init is finished
