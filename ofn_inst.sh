@@ -1,6 +1,9 @@
 #!/bin/bash
 # ofn_inst.sh
 
+# Oracle (database) Free Now! (OFN) 
+# Installs Oracle AI database Free edition
+
 # current Oracle AI Database free name / version
 DBFPNAME=oracle-ai-database-preinstall-26ai
 DBFPVER=1.0-1
@@ -9,6 +12,12 @@ DBFVER=23.26.2-1
 # previous version
 #DBFNAME=oracle-database-free-23ai
 # DBFVER=23.9-1, 23.26.0-1
+
+# tools latest urls
+sqlcl_latest=https://download.oracle.com/otn_software/java/sqldeveloper/sqlcl-latest.zip
+apex_latest=https://download.oracle.com/otn_software/apex/apex-latest.zip
+autoup_latest=https://download.oracle.com/otn-pub/otn_software/autoupgrade.jar
+
 
 # Internal settings
 SCRIPTVER=1.0.0
@@ -97,6 +106,48 @@ instOFNRPM(){
     return ${my_return}
 }
 
+# function sqlcl_inst /opt/oracle/ofndata/stage /opt/oracle https://URL
+#
+function sqlcl_inst () {
+
+  local my_stgdir=$1
+  local my_base=$2
+  local my_sqlcl_url=$3
+
+  local my_file
+  local my_return
+
+  my_return=0
+
+  # make staging location if it doesn't exist
+  [ ! -d "${my_stgdir}" ] && /bin/mkdir -p "${my_stgdir}" 
+
+  # download the file
+  logMesg 0 "Downlaoding latest SQLCL from: ${my_sqlcl_url}" I "${log_file}"
+  cd "${my_stgdir}"
+  /bin/curl -O -L "${my_sqlcl_url}"
+  cd -
+
+  # get the filename for the install
+  my_file="$( /bin/basename "${my_sqlcl_url}" )"
+
+  # unzip the install
+  if [ -f "${my_stgdir}/${my_file}" ]; then
+      /bin/unzip -q "${my_stgdir}/${my_file}" -d "${my_base}"
+
+      # add the alias for SQLcl to user profile
+      echo "alias sql='${my_base}/sqlcl/bin/sql'" >> /home/oracle/.bashrc
+      logMesg 0 "SQLCL Installed and alias configured: ${my_base}/sqlcl/bin" I "${log_file}"
+  else
+      logMesg 1 "Could not download the SQLcl install file: ${my_sqlcl_url}" E "NONE";
+      my_return=1
+  fi
+
+  return ${my_return}
+}
+
+
+
 ############################################################################################
 # start here
 
@@ -131,9 +182,6 @@ if [ ! -d "/opt/oracle" ]; then
     mkOFNDir "/opt/oracle" "${log_file}" || return_code=2
 fi
 
-# Make run directory
-mkOFNRUNDir "${ofnrun}" "${log_file}" || return_code=2
-
 if [ ! -d "${ofndata}" ]; then
    mkOFNDir "${ofndata}" "${log_file}" || return_code=2
 fi
@@ -156,6 +204,9 @@ if instOFNRPM "${dbfpurl}" "${log_file}"; then
     # post pre-install change ownership of files
     /bin/chown -R "${file_owner}" "${oracle_base}"
 
+    # Make run directory
+    mkOFNRUNDir "${ofnrun}" "${log_file}" || return_code=2
+
     # also fix any ofn files
     /bin/chown -R "${file_owner}" "${ofnbase}"
     /usr/bin/find "${ofnbase}" -name \*.sh -exec /usr/bin/chmod 754 {} \; 
@@ -171,18 +222,36 @@ fi
 # set a random password 16 characters long
 password=$( /bin/tr -dc '#_$A-Za-z0-9' < /dev/urandom | /bin/head -c 16 )
 
+# check for different DB file storage location
+if [ ${db_data:-} ]; then
+    /bin/sed -i "s/^DBFILE_DEST=/DBFILE_DEST=${db_data}/g" /etc/sysconfig/oracle-free-26ai.conf
+fi
+
 logMesg 0 "Begining database configuration." I "${log_file}"
-(echo "${password}"; echo "${password}";) | /etc/init.d/oracle-free-26ai configure >> "${log_file}" 2>&1
-logMesg 0 "Check log file for database configuration issues." I "${log_file}"
+set -o pipefail; (echo "${password}"; echo "${password}";) | /etc/init.d/oracle-free-26ai configure >> "${log_file}" 2>&1
+return_code=$?
+logMesg 0 "Check log file for database configuration issues. DB configure returned: ${return_code}" I "${log_file}"
 logMesg 0 "Initial password set to: ${password}" I "${log_file}"
 
 # setup Oracle user shell
 ora_bashrc=/home/oracle/.bashrc
 echo "# added by OFN script"   >> "${ora_bashrc}"
+echo 'export PATH=$PATH:/usr/local/bin'  >> "${ora_bashrc}"
 echo "export ORACLE_SID=FREE"  >> "${ora_bashrc}"
 echo "export ORAENV_ASK=NO"  >> "${ora_bashrc}" 
+echo 'export PATH="${PATH}":/usr/local/bin'  >> "${ora_bashrc}" 
 echo "source /opt/oracle/product/26ai/dbhomeFree/bin/oraenv -s"  >> "${ora_bashrc}"
 echo ""                        >> "${ora_bashrc}"
+
+if (( return_code < 1 )); then
+    # Install latest sqlcl tool
+    logMesg 0 "Installing latest SQLCL to: ${oracle_base}" I "${log_file}"
+    sqlcl_inst "${ofndata}/stage" "${oracle_base}" "${sqlcl_latest}"
+    return_code=$?
+    logMesg 0 "Check log file for SQLCL issues. install returned: ${return_code}" I "${log_file}"
+else
+    logMesg 0 "Skipping SQLCL install due to DB install errror" I "${log_file}"
+fi
 
 exit ${return_code}
 #END

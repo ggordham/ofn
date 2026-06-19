@@ -162,6 +162,65 @@ function chkOraDBUp {
   return 0
 }
 
+
+# shutdown_db [ immediate | force | abort ]
+#
+function shutdown_db () {
+
+    local my_mode=$1
+
+    # for instance shutdown we unset the PDB
+    unset ORACLE_PDB_SID
+
+    # Shutdown the database 
+    "${ORACLE_HOME}/bin/sqlplus" -s /nolog  <<!EOF 
+          WHENEVER sqlerror EXIT sql.sqlcode;
+          CONNECT / AS SYSDBA
+          SHUTDOWN ${my_mode};
+
+          exit
+!EOF
+    my_return=$?
+
+    return $my_return
+
+}
+
+# startup_db [ nomount | mount | restrict | force | open { recover| read only | read write } ]
+#
+function startup_db () {
+
+    local my_mode=$1
+
+    # assume open mode if no paramter given
+    [ -z "${my_mode:-}" ] && my_mode='OPEN'
+
+    # for instance shutdown we unset the PDB
+    unset ORACLE_PDB_SID
+
+    # Shutdown the database 
+    "${ORACLE_HOME}/bin/sqlplus" -s /nolog  <<!EOF 
+          WHENEVER sqlerror EXIT sql.sqlcode;
+          CONNECT / AS SYSDBA
+          STARTUP ${my_mode};
+
+          exit
+!EOF
+    my_return=$?
+
+    return $my_return
+
+
+
+}
+
+# Load OFN databae variables
+db_tns=$( cfgGet "$CONF_FILE" db_tns )
+db_admin=$( cfgGet "$CONF_FILE" db_admin )
+db_home=$( cfgGet "$CONF_FILE" db_home )
+db_data=$( cfgGet "$CONF_FILE" db_data )
+db_arch=$( cfgGet "$CONF_FILE" db_arch )
+
 # ADRCI need to add features
 # Check which homes exist
 #  adrci> show homes

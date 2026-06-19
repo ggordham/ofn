@@ -13,7 +13,6 @@ SCRIPTNAME=$(basename "${BASH_SOURCE[0]}")
 SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # variables for script
-wait_sec=60                                        # number of seconds to wait after cloud-init before reboot
 repo_url=https://github.com/ggordham/ofn           # github URL for OFN
 package_root=ggordham-ofn                          # github packate name
 target_path=/opt/ofn                               # target install path
@@ -150,9 +149,9 @@ if [ "${reboot}" == "TRUE" ]; then
     #  Be sure to exit 0 for terraform to get good status
     echo "initiating reboot $( date )" | /usr/bin/tee -a "${log_file}"
     if [ "$TEST" == "TRUE" ]; then
-        echo "Test mode, not running: /usr/bin/nohup /bin/bash -c /usr/bin/sleep ${wait_sec} && /usr/bin/sudo /usr/sbin/reboot" | /usr/bin/tee -a "${log_file}"
+        echo "Test mode, not running: /usr/bin/nohup /bin/bash -c /usr/bin/sleep 60 && /usr/bin/sudo /usr/sbin/reboot" | /usr/bin/tee -a "${log_file}"
     else
-        /usr/bin/nohup /bin/bash -c "/usr/bin/sleep ${wait_sec} && /usr/bin/sudo -u root /usr/sbin/reboot" >> /tmp/ofn-reboot.log 2>&1 &
+        /usr/bin/nohup /bin/bash "/usr/bin/sleep 60 && /usr/bin/sudo -u root /usr/sbin/reboot" >> /tmp/ofn-reboot.log 2>&1 &
         jobs | /usr/bin/tee -a "${log_file}"
     fi
 fi

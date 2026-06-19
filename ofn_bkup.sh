@@ -322,7 +322,7 @@ if checkopt_ofn_bkup "$OPTIONS" ; then
     (( return_code > 0 )) && exit $return_code
  
     # setup logfile
-    log_file="${ofnlog}/db-backup-$( /bin/date +%Y%m%d-%H%M%S ).log"
+    log_file="${ofnlog}/db-backup-${bkuptype^^}-$( /bin/date +%Y%m%d-%H%M%S ).log"
 
     # start script
     logMesg 0 "$SCRIPTNAME start" I "${log_file}"
