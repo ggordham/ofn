@@ -146,7 +146,20 @@ function sqlcl_inst () {
   return ${my_return}
 }
 
+# upd_firewall () 
+#
+upd_firewall () {
 
+    local my_lsnr_port
+    local my_ords_port
+
+    my_lsnr_port=$( cfgGet "$CONF_FILE" lsnr_port )
+    my_ords_port=$( cfgGet "$CONF_FILE" ords_port )
+  
+    /usr/bin/sudo sh -c "/bin/firewall-cmd --permanent --zone=public --add-port=${my_lsnr_port}/tcp"
+    /usr/bin/sudo sh -c "/bin/firewall-cmd --permanent --zone=public --add-port=${my_ords_port}/tcp"
+    /usr/bin/sudo sh -c "/bin/firewall-cmd --reload"
+}
 
 ############################################################################################
 # start here
@@ -223,7 +236,7 @@ fi
 password=$( /bin/tr -dc '#_$A-Za-z0-9' < /dev/urandom | /bin/head -c 16 )
 
 # check for different DB file storage location
-if [ ${db_data:-} ]; then
+if [ -n "${db_data:-}" ]; then
     /bin/sed -i "s/^DBFILE_DEST=/DBFILE_DEST=${db_data}/g" /etc/sysconfig/oracle-free-26ai.conf
 fi
 
@@ -232,6 +245,10 @@ set -o pipefail; (echo "${password}"; echo "${password}";) | /etc/init.d/oracle-
 return_code=$?
 logMesg 0 "Check log file for database configuration issues. DB configure returned: ${return_code}" I "${log_file}"
 logMesg 0 "Initial password set to: ${password}" I "${log_file}"
+
+# update the fiewall
+#
+upd_firewall
 
 # setup Oracle user shell
 ora_bashrc=/home/oracle/.bashrc
@@ -242,6 +259,8 @@ echo "export ORAENV_ASK=NO"  >> "${ora_bashrc}"
 echo 'export PATH="${PATH}":/usr/local/bin'  >> "${ora_bashrc}" 
 echo "source /opt/oracle/product/26ai/dbhomeFree/bin/oraenv -s"  >> "${ora_bashrc}"
 echo ""                        >> "${ora_bashrc}"
+echo 'alias cdoh="cd ${ORACLE_HOME}"'                  >> "${ora_bashrc}"
+echo 'alias sql="${ORACLE_HOME}/sqlcl/bin/sql"'        >> "${ora_bashrc}"
 
 if (( return_code < 1 )); then
     # Install latest sqlcl tool
